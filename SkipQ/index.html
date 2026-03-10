@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkipQ - Smart Queue System</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div class="container">
+    <h1>SkipQ</h1>
+    <p>Skip the wait. Not the service.</p>
+
+    <div class="card">
+      <h2>Welcome!</h2>
+      <p style="color:#64748b; margin-bottom:20px;">SkipQ is a smart queue management system that lets you join queues online and track your position in real time.</p>
+
+      <button onclick="window.location.href='register.html'">Get Started</button>
+      <button onclick="window.location.href='login.html'" style="background:transparent; color:#64748b; border:1.5px solid #e2e8f0; margin-top:8px;">Login</button>
+    </div>
+
+    <div class="features">
+      <div class="feature-box">
+        <h3>⏱️</h3>
+        <h3>Real-Time</h3>
+        <p>Track your queue position live</p>
+      </div>
+      <div class="feature-box">
+        <h3>🔔</h3>
+        <h3>Alerts</h3>
+        <p>Get notified when your turn is near</p>
+      </div>
+      <div class="feature-box">
+        <h3>🏢</h3>
+        <h3>Any Business</h3>
+        <p>Works for any service counter</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAot9lQJOkvcP00wBLePl-nclDCoTr-wew",
+      authDomain: "skipq-dc1ac.firebaseapp.com",
+      databaseURL: "https://skipq-dc1ac-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "skipq-dc1ac",
+      storageBucket: "skipq-dc1ac.firebasestorage.app",
+      messagingSenderId: "333677496735",
+      appId: "1:333677496735:web:d0e6c676c133743cba95aa"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    auth.onAuthStateChanged(function(user) {
+      if (user) {
+        window.location.href = 'queue.html';
+      }
+    });
+  </script>
+
+</body>
+</html>

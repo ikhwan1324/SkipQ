@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkipQ - Join Queue</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div class="container">
+    <div class="admin-header">
+      <h1>SkipQ</h1>
+      <button id="logoutBtn">Logout</button>
+    </div>
+    <p id="welcome-msg">Welcome!</p>
+
+    <div class="card">
+      <h2>Join a Queue 🎟️</h2>
+
+      <p style="color:#64748b; font-size:0.9rem; margin-bottom:16px;">
+        Select a counter below and we'll assign you a queue number instantly.
+      </p>
+
+      <select id="service">
+        <option value="">-- Select a Counter --</option>
+        <option value="counter1">Counter 1</option>
+        <option value="counter2">Counter 2</option>
+        <option value="counter3">Counter 3</option>
+      </select>
+
+      <button id="joinBtn">Join Queue</button>
+
+      <p id="error-msg"></p>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAot9lQJOkvcP00wBLePl-nclDCoTr-wew",
+      authDomain: "skipq-dc1ac.firebaseapp.com",
+      databaseURL: "https://skipq-dc1ac-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "skipq-dc1ac",
+      storageBucket: "skipq-dc1ac.firebasestorage.app",
+      messagingSenderId: "333677496735",
+      appId: "1:333677496735:web:d0e6c676c133743cba95aa"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    auth.onAuthStateChanged(async function(user) {
+      if (user) {
+        const userDoc = await db.collection("users").doc(user.uid).get();
+        const name = userDoc.exists && userDoc.data().name ? userDoc.data().name : user.email;
+        document.getElementById('welcome-msg').textContent = "Welcome back, " + name + "!";
+      } else {
+        window.location.href = 'login.html';
+      }
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+      auth.signOut().then(function() {
+        window.location.href = 'login.html';
+      });
+    });
+
+    document.getElementById('joinBtn').addEventListener('click', async function() {
+      const service = document.getElementById('service').value;
+      const errorMsg = document.getElementById('error-msg');
+
+      if (!service) {
+        errorMsg.textContent = "Please select a counter.";
+        return;
+      }
+
+      const user = auth.currentUser;
+
+      try {
+        const existingQueue = await db.collection("queues")
+          .where("userID", "==", user.uid)
+          .where("status", "in", ["waiting", "serving"])
+          .get();
+
+        if (!existingQueue.empty) {
+          errorMsg.textContent = "You are already in a queue! Please wait for your turn.";
+          return;
+        }
+
+        const snapshot = await db.collection("queues")
+          .where("serviceID", "==", service)
+          .where("status", "in", ["waiting", "serving"])
+          .get();
+
+        const queueNumber = snapshot.size + 1;
+        const queueCode = "Counter " + service.slice(-1) + " - " + String(queueNumber).padStart(3, '0');
+
+        await db.collection("queues").add({
+          serviceID: service,
+          userID: user.uid,
+          queueNumber: queueNumber,
+          queueCode: queueCode,
+          status: "waiting",
+          timestamp: new Date()
+        });
+
+        window.location.href = 'status.html';
+      } catch (error) {
+        errorMsg.textContent = "Error joining queue: " + error.message;
+      }
+    });
+  </script>
+
+</body>
+</html>

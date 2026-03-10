@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkipQ - Admin Dashboard</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <style>
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+    }
+    .span-full {
+      grid-column: 1 / -1;
+    }
+    @media (max-width: 600px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      .span-full {
+        grid-column: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container" style="max-width:900px;">
+    <div class="admin-header">
+      <h1>SkipQ Admin</h1>
+      <button id="logoutBtn">Logout</button>
+    </div>
+    <p>Queue Control Dashboard | <a href="analytics.html" style="color:#2563eb;">View Analytics →</a></p>
+
+    <div class="dashboard-grid">
+
+      <!-- Live Overview -->
+      <div class="card" style="grid-column:1; grid-row:1;">
+        <h2>🔴 Live Overview</h2>
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px; text-align:center;">
+            <p style="color:#64748b; font-size:0.8rem; margin-bottom:6px;">Counter 1</p>
+            <div class="stat-badge" id="c1-waiting">0</div>
+            <p style="color:#64748b; font-size:0.75rem; margin-top:4px;">waiting</p>
+            <p id="c1-serving" style="color:#2563eb; font-size:0.8rem; margin-top:4px;">Serving: --</p>
+          </div>
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px; text-align:center;">
+            <p style="color:#64748b; font-size:0.8rem; margin-bottom:6px;">Counter 2</p>
+            <div class="stat-badge" id="c2-waiting">0</div>
+            <p style="color:#64748b; font-size:0.75rem; margin-top:4px;">waiting</p>
+            <p id="c2-serving" style="color:#2563eb; font-size:0.8rem; margin-top:4px;">Serving: --</p>
+          </div>
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px; text-align:center;">
+            <p style="color:#64748b; font-size:0.8rem; margin-bottom:6px;">Counter 3</p>
+            <div class="stat-badge" id="c3-waiting">0</div>
+            <p style="color:#64748b; font-size:0.75rem; margin-top:4px;">waiting</p>
+            <p id="c3-serving" style="color:#2563eb; font-size:0.8rem; margin-top:4px;">Serving: --</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controls next to Live Overview -->
+      <div class="card" style="grid-column:2; grid-row:1;">
+        <h2>Controls</h2>
+        <select id="service-select" style="margin-bottom:8px;">
+          <option value="counter1">Counter 1</option>
+          <option value="counter2">Counter 2</option>
+          <option value="counter3">Counter 3</option>
+        </select>
+        <button id="nextBtn" style="margin-top:4px;">✅ Call Next</button>
+        <button id="skipBtn" class="btn-warning">⏭️ Skip</button>
+        <button id="resetBtn" class="btn-danger">🔄 Reset</button>
+        <p id="msg" style="margin-top:8px; font-weight:600; font-size:0.8rem;"></p>
+      </div>
+
+      <!-- Queue Overview -->
+      <div class="card">
+        <h2>Queue Overview</h2>
+        <div class="status-row">
+          <span>Now Serving</span>
+          <span class="stat-badge" id="now-serving">--</span>
+        </div>
+        <div class="status-row">
+          <span>Total Waiting</span>
+          <span class="stat-badge" id="total-waiting">--</span>
+        </div>
+      </div>
+
+      <!-- Waiting List -->
+      <div class="card">
+        <h2>Waiting List</h2>
+        <div id="queue-list">
+          <p style="color:#64748b; text-align:center;">No one in queue right now.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAot9lQJOkvcP00wBLePl-nclDCoTr-wew",
+      authDomain: "skipq-dc1ac.firebaseapp.com",
+      databaseURL: "https://skipq-dc1ac-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "skipq-dc1ac",
+      storageBucket: "skipq-dc1ac.firebasestorage.app",
+      messagingSenderId: "333677496735",
+      appId: "1:333677496735:web:d0e6c676c133743cba95aa"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    function getService() {
+      return document.getElementById('service-select').value;
+    }
+
+    function loadAllCountersOverview() {
+      ['counter1', 'counter2', 'counter3'].forEach((counter, i) => {
+        const num = i + 1;
+        db.collection("queues")
+          .where("serviceID", "==", counter)
+          .where("status", "in", ["waiting", "serving"])
+          .onSnapshot(function(snapshot) {
+            const waiting = snapshot.docs.filter(d => d.data().status === "waiting");
+            const serving = snapshot.docs.filter(d => d.data().status === "serving");
+            document.getElementById(`c${num}-waiting`).textContent = waiting.length;
+            if (serving.length > 0) {
+              const code = serving[0].data().queueCode.split(' - ')[1] || serving[0].data().queueCode;
+              document.getElementById(`c${num}-serving`).textContent = "Serving: " + code;
+            } else {
+              document.getElementById(`c${num}-serving`).textContent = "Serving: --";
+            }
+          });
+      });
+    }
+
+    function loadQueue() {
+      const service = getService();
+      db.collection("queues")
+        .where("serviceID", "==", service)
+        .where("status", "in", ["waiting", "serving"])
+        .orderBy("queueNumber")
+        .onSnapshot(function(snapshot) {
+          const list = document.getElementById('queue-list');
+          const waiting = snapshot.docs.filter(d => d.data().status === "waiting");
+          const serving = snapshot.docs.filter(d => d.data().status === "serving");
+
+          document.getElementById('total-waiting').textContent = waiting.length;
+          document.getElementById('now-serving').textContent = serving.length > 0 ? serving[0].data().queueCode : "--";
+
+          if (snapshot.empty) {
+            list.innerHTML = "<p style='color:#64748b; text-align:center; padding:16px;'>No one in queue right now.</p>";
+            return;
+          }
+
+          list.innerHTML = "";
+          snapshot.docs.forEach(doc => {
+            const d = doc.data();
+            const isServing = d.status === "serving";
+            list.innerHTML += `
+              <div class="queue-item ${isServing ? 'serving' : ''}">
+                <span>${d.queueCode}</span>
+                <span style="color:${isServing ? '#10b981' : '#64748b'}; font-size:0.85rem; font-weight:500;">
+                  ${isServing ? '🟢 Serving' : '⏳ Waiting'}
+                </span>
+              </div>
+            `;
+          });
+        });
+    }
+
+    document.getElementById('nextBtn').addEventListener('click', async function() {
+      const service = getService();
+      const msg = document.getElementById('msg');
+      const servingSnap = await db.collection("queues")
+        .where("serviceID", "==", service)
+        .where("status", "==", "serving")
+        .get();
+      servingSnap.forEach(doc => {
+        db.collection("queues").doc(doc.id).update({ status: "completed" });
+      });
+      const waitingSnap = await db.collection("queues")
+        .where("serviceID", "==", service)
+        .where("status", "==", "waiting")
+        .orderBy("queueNumber")
+        .limit(1)
+        .get();
+      if (waitingSnap.empty) {
+        msg.style.color = "#ef4444";
+        msg.textContent = "No more people in queue!";
+        return;
+      }
+      const nextDoc = waitingSnap.docs[0];
+      await db.collection("queues").doc(nextDoc.id).update({ status: "serving" });
+      msg.style.color = "#10b981";
+      msg.textContent = "Now serving: " + nextDoc.data().queueCode;
+    });
+
+    document.getElementById('skipBtn').addEventListener('click', async function() {
+      const service = getService();
+      const msg = document.getElementById('msg');
+      const servingSnap = await db.collection("queues")
+        .where("serviceID", "==", service)
+        .where("status", "==", "serving")
+        .get();
+      servingSnap.forEach(doc => {
+        db.collection("queues").doc(doc.id).update({ status: "completed" });
+      });
+      const waitingSnap = await db.collection("queues")
+        .where("serviceID", "==", service)
+        .where("status", "==", "waiting")
+        .orderBy("queueNumber")
+        .limit(1)
+        .get();
+      if (waitingSnap.empty) {
+        msg.style.color = "#ef4444";
+        msg.textContent = "No more people in queue!";
+        return;
+      }
+      const nextDoc = waitingSnap.docs[0];
+      await db.collection("queues").doc(nextDoc.id).update({ status: "serving" });
+      msg.style.color = "#f59e0b";
+      msg.textContent = "Skipped! Now serving: " + nextDoc.data().queueCode;
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', async function() {
+      const service = getService();
+      const msg = document.getElementById('msg');
+      const snap = await db.collection("queues")
+        .where("serviceID", "==", service)
+        .where("status", "in", ["waiting", "serving"])
+        .get();
+      snap.forEach(doc => {
+        db.collection("queues").doc(doc.id).update({ status: "completed" });
+      });
+      msg.style.color = "#ef4444";
+      msg.textContent = "Queue has been reset.";
+    });
+
+    document.getElementById('service-select').addEventListener('change', loadQueue);
+
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+      auth.signOut().then(function() {
+        window.location.href = '../login.html';
+      });
+    });
+
+    auth.onAuthStateChanged(async function(user) {
+      if (!user) {
+        window.location.href = 'control.html';
+        return;
+      }
+      const doc = await db.collection("users").doc(user.uid).get();
+      if (doc.exists && doc.data().role === "admin") {
+        loadAllCountersOverview();
+        loadQueue();
+      } else {
+        auth.signOut();
+        window.location.href = 'control.html';
+      }
+    });
+  </script>
+
+</body>
+</html>
