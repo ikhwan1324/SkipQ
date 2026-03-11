@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkipQ - Admin Login</title>
+  <link rel="stylesheet" href="../css/style.css" />
+</head>
+<body>
+
+  <div class="container">
+    <h1>SkipQ</h1>
+    <p>Admin Portal</p>
+
+    <div class="card">
+      <h2>Admin Login 🔐</h2>
+
+      <input type="email" id="email" placeholder="Admin email address" />
+      <input type="password" id="password" placeholder="Password" />
+
+      <button id="loginBtn">Login as Admin</button>
+
+      <p style="text-align:center; margin-top:16px; font-size:0.85rem; color:#64748b;">
+        This portal is for authorized administrators only.
+      </p>
+
+      <p id="error-msg"></p>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAot9lQJOkvcP00wBLePl-nclDCoTr-wew",
+      authDomain: "skipq-dc1ac.firebaseapp.com",
+      databaseURL: "https://skipq-dc1ac-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "skipq-dc1ac",
+      storageBucket: "skipq-dc1ac.firebasestorage.app",
+      messagingSenderId: "333677496735",
+      appId: "1:333677496735:web:d0e6c676c133743cba95aa"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    document.getElementById('loginBtn').addEventListener('click', async function() {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const errorMsg = document.getElementById('error-msg');
+
+      if (!email || !password) {
+        errorMsg.textContent = "Please fill in all fields.";
+        return;
+      }
+
+      try {
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+
+        const doc = await db.collection("users").doc(user.uid).get();
+
+        if (doc.exists && doc.data().role === "admin") {
+          window.location.href = 'dashboard.html';
+        } else {
+          auth.signOut();
+          errorMsg.textContent = "Access denied. You are not an admin.";
+        }
+      } catch (error) {
+        errorMsg.textContent = "Login failed. Check your credentials.";
+      }
+    });
+  </script>
+
+</body>
+</html>

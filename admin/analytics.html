@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkipQ - Analytics</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .span-full {
+      grid-column: 1 / -1;
+    }
+    @media (max-width: 600px) {
+      .analytics-grid {
+        grid-template-columns: 1fr;
+      }
+      .span-full {
+        grid-column: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container" style="max-width:900px;">
+    <div class="admin-header">
+      <h1>SkipQ Admin</h1>
+      <button id="logoutBtn">Logout</button>
+    </div>
+    <p>Analytics Dashboard | <a href="dashboard.html" style="color:#2563eb;">← Back to Dashboard</a></p>
+
+    <div class="analytics-grid">
+
+      <!-- 4 Stat Cards -->
+      <div class="card" style="text-align:center;">
+        <p style="color:#64748b; font-size:0.85rem;">Total Served Today</p>
+        <div class="stat-badge" id="total-today">--</div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <p style="color:#64748b; font-size:0.85rem;">Avg Wait Time</p>
+        <div class="stat-badge" id="avg-wait">--</div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <p style="color:#64748b; font-size:0.85rem;">Currently Waiting</p>
+        <div class="stat-badge" id="currently-waiting">--</div>
+      </div>
+      <div class="card" style="text-align:center;">
+        <p style="color:#64748b; font-size:0.85rem;">Total All Time</p>
+        <div class="stat-badge" id="total-alltime">--</div>
+      </div>
+
+      <!-- Counter Chart + Hourly Chart side by side -->
+      <div class="card">
+        <h2>Queue by Counter</h2>
+        <canvas id="counterChart" height="220"></canvas>
+      </div>
+
+      <div class="card">
+        <h2>Today's Activity by Hour</h2>
+        <canvas id="hourlyChart" height="220"></canvas>
+      </div>
+
+      <!-- Recent Activity full width -->
+      <div class="card span-full">
+        <h2>Recent Activity</h2>
+        <div id="recent-list">
+          <p style="color:#64748b; text-align:center; padding:16px;">No activity today.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAot9lQJOkvcP00wBLePl-nclDCoTr-wew",
+      authDomain: "skipq-dc1ac.firebaseapp.com",
+      databaseURL: "https://skipq-dc1ac-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "skipq-dc1ac",
+      storageBucket: "skipq-dc1ac.firebasestorage.app",
+      messagingSenderId: "333677496735",
+      appId: "1:333677496735:web:d0e6c676c133743cba95aa"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let counterChart = null;
+    let hourlyChart = null;
+
+    async function loadAnalytics() {
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+      const allSnap = await db.collection("queues").get();
+      const todaySnap = await db.collection("queues")
+        .where("timestamp", ">=", startOfDay)
+        .get();
+
+      const allDocs = allSnap.docs.map(d => d.data());
+      const todayDocs = todaySnap.docs.map(d => d.data());
+
+      const servedToday = todayDocs.filter(d => d.status === "completed").length;
+      document.getElementById('total-today').textContent = servedToday;
+      document.getElementById('total-alltime').textContent = allDocs.filter(d => d.status === "completed").length;
+
+      const waiting = allDocs.filter(d => d.status === "waiting" || d.status === "serving").length;
+      document.getElementById('currently-waiting').textContent = waiting;
+
+      const avgWait = waiting > 0 ? Math.round(waiting * 5 / 3) : 0;
+      document.getElementById('avg-wait').textContent = avgWait + " min";
+
+      // Counter chart
+      const counter1 = todayDocs.filter(d => d.serviceID === "counter1").length;
+      const counter2 = todayDocs.filter(d => d.serviceID === "counter2").length;
+      const counter3 = todayDocs.filter(d => d.serviceID === "counter3").length;
+
+      if (counterChart) counterChart.destroy();
+      counterChart = new Chart(document.getElementById('counterChart'), {
+        type: 'bar',
+        data: {
+          labels: ['Counter 1', 'Counter 2', 'Counter 3'],
+          datasets: [{
+            label: 'Queues Today',
+            data: [counter1, counter2, counter3],
+            backgroundColor: ['#2563eb', '#06b6d4', '#10b981'],
+            borderRadius: 8
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+          }
+        }
+      });
+
+      // Hourly chart
+      const hours = Array.from({length: 24}, (_, i) => i);
+      const hourlyCounts = hours.map(hour => {
+        return todayDocs.filter(d => {
+          const ts = d.timestamp?.toDate ? d.timestamp.toDate() : new Date(d.timestamp);
+          return ts.getHours() === hour;
+        }).length;
+      });
+
+      if (hourlyChart) hourlyChart.destroy();
+      hourlyChart = new Chart(document.getElementById('hourlyChart'), {
+        type: 'line',
+        data: {
+          labels: hours.map(h => h + ":00"),
+          datasets: [{
+            label: 'Queue Joins',
+            data: hourlyCounts,
+            borderColor: '#2563eb',
+            backgroundColor: 'rgba(37,99,235,0.08)',
+            fill: true,
+            tension: 0.4,
+            pointRadius: 3
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { beginAtZero: true, ticks: { stepSize: 1 } }
+          }
+        }
+      });
+
+      // Recent activity
+      const recentDocs = todaySnap.docs
+        .sort((a, b) => b.data().timestamp - a.data().timestamp)
+        .slice(0, 10);
+
+      const list = document.getElementById('recent-list');
+      if (recentDocs.length === 0) {
+        list.innerHTML = "<p style='color:#64748b; text-align:center; padding:16px;'>No activity today.</p>";
+        return;
+      }
+
+      list.innerHTML = "";
+      recentDocs.forEach(doc => {
+        const d = doc.data();
+        const ts = d.timestamp?.toDate ? d.timestamp.toDate() : new Date(d.timestamp);
+        const time = ts.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const counter = d.serviceID === "counter1" ? "Counter 1" : d.serviceID === "counter2" ? "Counter 2" : "Counter 3";
+        const statusColor = d.status === "completed" ? "#10b981" : d.status === "serving" ? "#2563eb" : "#64748b";
+
+        list.innerHTML += `
+          <div class="queue-item">
+            <div>
+              <span style="font-weight:600;">${d.queueCode}</span>
+              <span style="color:#64748b; font-size:0.8rem; margin-left:8px;">${counter}</span>
+            </div>
+            <div style="text-align:right;">
+              <span style="color:${statusColor}; font-size:0.85rem; font-weight:500;">${d.status}</span>
+              <div style="color:#64748b; font-size:0.8rem;">${time}</div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+      auth.signOut().then(function() {
+        window.location.href = '../login.html';
+      });
+    });
+
+    auth.onAuthStateChanged(async function(user) {
+      if (!user) {
+        window.location.href = 'control.html';
+        return;
+      }
+      const doc = await db.collection("users").doc(user.uid).get();
+      if (doc.exists && doc.data().role === "admin") {
+        loadAnalytics();
+      } else {
+        auth.signOut();
+        window.location.href = 'control.html';
+      }
+    });
+  </script>
+
+</body>
+</html>

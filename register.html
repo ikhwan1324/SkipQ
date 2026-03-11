@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkipQ - Register</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div class="container">
+    <h1>SkipQ</h1>
+    <p>Smart Queue System</p>
+
+    <div class="card">
+      <h2>Create Account 🙌</h2>
+
+      <input type="text" id="name" placeholder="Full Name" />
+      <input type="email" id="email" placeholder="Email address" />
+      <input type="password" id="password" placeholder="Password (min 6 characters)" />
+
+      <button id="registerBtn">Create Account</button>
+
+      <div style="display:flex; align-items:center; gap:10px; margin:16px 0;">
+        <hr style="flex:1; margin:0;" />
+        <span style="color:#64748b; font-size:0.85rem;">or</span>
+        <hr style="flex:1; margin:0;" />
+      </div>
+
+      <button id="googleBtn" style="background:white; color:#333; border:1.5px solid #e2e8f0; display:flex; align-items:center; justify-content:center; gap:10px;">
+        <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" />
+        Continue with Google
+      </button>
+
+      <p style="text-align:center; margin-top:16px; color:#64748b; font-size:0.9rem;">
+        Already have an account? <a href="login.html">Login here</a>
+      </p>
+
+      <p id="error-msg"></p>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAot9lQJOkvcP00wBLePl-nclDCoTr-wew",
+      authDomain: "skipq-dc1ac.firebaseapp.com",
+      databaseURL: "https://skipq-dc1ac-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "skipq-dc1ac",
+      storageBucket: "skipq-dc1ac.firebasestorage.app",
+      messagingSenderId: "333677496735",
+      appId: "1:333677496735:web:d0e6c676c133743cba95aa"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    // Email register
+    document.getElementById('registerBtn').addEventListener('click', async function() {
+      const name = document.getElementById('name').value;
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const errorMsg = document.getElementById('error-msg');
+
+      if (!name || !email || !password) {
+        errorMsg.textContent = "Please fill in all fields.";
+        return;
+      }
+
+      if (password.length < 6) {
+        errorMsg.textContent = "Password must be at least 6 characters.";
+        return;
+      }
+
+      try {
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+
+        await db.collection("users").doc(user.uid).set({
+          name: name,
+          email: email,
+          role: "customer",
+          createdAt: new Date()
+        });
+
+        window.location.href = 'queue.html';
+      } catch (error) {
+        errorMsg.textContent = "Registration failed: " + error.message;
+      }
+    });
+
+    // Google register
+    document.getElementById('googleBtn').addEventListener('click', async function() {
+      const errorMsg = document.getElementById('error-msg');
+      const provider = new firebase.auth.GoogleAuthProvider();
+
+      try {
+        const result = await auth.signInWithPopup(provider);
+        const user = result.user;
+
+        const userDoc = await db.collection("users").doc(user.uid).get();
+        if (!userDoc.exists) {
+          await db.collection("users").doc(user.uid).set({
+            name: user.displayName,
+            email: user.email,
+            role: "customer",
+            createdAt: new Date()
+          });
+        }
+
+        window.location.href = 'queue.html';
+      } catch (error) {
+        errorMsg.textContent = "Google sign-in failed. Please try again.";
+      }
+    });
+  </script>
+
+</body>
+</html>

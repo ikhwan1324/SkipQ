@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SkipQ - Queue Status</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <div class="container">
+    <div class="admin-header">
+      <h1>SkipQ</h1>
+      <button id="logoutBtn">Logout</button>
+    </div>
+    <p>Your Queue Status</p>
+
+    <div class="card">
+      <h2>Your Queue Number</h2>
+      <div id="queue-code">--</div>
+
+      <hr />
+
+      <div class="status-row">
+        <span>Counter</span>
+        <strong id="counter-name">--</strong>
+      </div>
+      <div class="status-row">
+        <span>Current Serving</span>
+        <strong id="current-serving">--</strong>
+      </div>
+      <div class="status-row">
+        <span>Your Position</span>
+        <strong id="position">--</strong>
+      </div>
+      <div class="status-row">
+        <span>Estimated Wait</span>
+        <strong id="est-time">--</strong>
+      </div>
+      <div class="status-row">
+        <span>Status</span>
+        <strong id="status">--</strong>
+      </div>
+
+      <div id="notification-box" class="alert-box alert-warning" style="display:none;">
+        <strong>⚠️ Almost your turn!</strong>
+        <p>You are 3 or less positions away. Please proceed to the counter.</p>
+      </div>
+
+      <div id="your-turn-box" class="alert-box alert-success" style="display:none;">
+        <strong>✅ It's your turn!</strong>
+        <p>Please proceed to the counter now.</p>
+      </div>
+
+      <div id="served-box" class="alert-box alert-info" style="display:none;">
+        <strong>🎉 You have been served!</strong>
+        <p>Thank you for using SkipQ. Redirecting you shortly...</p>
+      </div>
+
+      <hr />
+
+      <button id="leaveBtn" class="btn-danger">Leave Queue</button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAot9lQJOkvcP00wBLePl-nclDCoTr-wew",
+      authDomain: "skipq-dc1ac.firebaseapp.com",
+      databaseURL: "https://skipq-dc1ac-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "skipq-dc1ac",
+      storageBucket: "skipq-dc1ac.firebasestorage.app",
+      messagingSenderId: "333677496735",
+      appId: "1:333677496735:web:d0e6c676c133743cba95aa"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+
+    let userQueueDoc = null;
+    let notificationSent = false;
+
+    if ("Notification" in window) {
+      Notification.requestPermission();
+    }
+
+    function sendBrowserNotification(title, message) {
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, { body: message });
+      }
+    }
+
+    function getCounterName(serviceID) {
+      const names = {
+        counter1: "Counter 1",
+        counter2: "Counter 2",
+        counter3: "Counter 3"
+      };
+      return names[serviceID] || serviceID;
+    }
+
+    auth.onAuthStateChanged(async function(user) {
+      if (!user) {
+        window.location.href = 'login.html';
+        return;
+      }
+
+      const snapshot = await db.collection("queues")
+        .where("userID", "==", user.uid)
+        .where("status", "in", ["waiting", "serving"])
+        .get();
+
+      if (snapshot.empty) {
+        window.location.href = 'queue.html';
+        return;
+      }
+
+      const queueDoc = snapshot.docs[0];
+      userQueueDoc = queueDoc;
+      const queueData = queueDoc.data();
+
+      // Show only the number part e.g. "001"
+      const numberOnly = queueData.queueCode.split(' - ')[1] || queueData.queueCode;
+      document.getElementById('queue-code').textContent = numberOnly;
+      document.getElementById('status').textContent = queueData.status;
+      document.getElementById('counter-name').textContent = getCounterName(queueData.serviceID);
+
+      // Listen for served status
+      db.collection("queues").doc(queueDoc.id).onSnapshot(function(doc) {
+        if (doc.data().status === "completed") {
+          document.getElementById('served-box').style.display = "block";
+          document.getElementById('your-turn-box').style.display = "none";
+          document.getElementById('notification-box').style.display = "none";
+          document.getElementById('leaveBtn').style.display = "none";
+          sendBrowserNotification("SkipQ", "You have been served! Thank you.");
+          setTimeout(function() {
+            window.location.href = 'queue.html';
+          }, 3000);
+        }
+      });
+
+      // Real-time listener for current serving
+      db.collection("queues")
+        .where("serviceID", "==", queueData.serviceID)
+        .where("status", "==", "serving")
+        .onSnapshot(function(snap) {
+          let currentServing = 0;
+
+          if (!snap.empty) {
+            currentServing = snap.docs[0].data().queueNumber;
+            const currentCode = snap.docs[0].data().queueCode.split(' - ')[1] || snap.docs[0].data().queueCode;
+            document.getElementById('current-serving').textContent = currentCode;
+          } else {
+            document.getElementById('current-serving').textContent = "--";
+          }
+
+          const position = queueData.queueNumber - currentServing;
+
+          if (position <= 0) {
+            document.getElementById('position').textContent = "Your turn!";
+            document.getElementById('est-time').textContent = "Now!";
+            document.getElementById('your-turn-box').style.display = "block";
+            document.getElementById('notification-box').style.display = "none";
+            sendBrowserNotification("SkipQ", "It's your turn! Please proceed to the counter.");
+          } else {
+            document.getElementById('position').textContent = position;
+            document.getElementById('est-time').textContent = (position * 5) + " minutes";
+            document.getElementById('your-turn-box').style.display = "none";
+
+            if (position <= 3) {
+              document.getElementById('notification-box').style.display = "block";
+              if (!notificationSent) {
+                sendBrowserNotification("SkipQ", "You are " + position + " away! Please get ready.");
+                notificationSent = true;
+              }
+            } else {
+              document.getElementById('notification-box').style.display = "none";
+            }
+          }
+        });
+    });
+
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+      auth.signOut().then(function() {
+        window.location.href = 'login.html';
+      });
+    });
+
+    document.getElementById('leaveBtn').addEventListener('click', async function() {
+      if (userQueueDoc) {
+        await db.collection("queues").doc(userQueueDoc.id).update({
+          status: "completed"
+        });
+        window.location.href = 'queue.html';
+      }
+    });
+  </script>
+
+</body>
+</html>
